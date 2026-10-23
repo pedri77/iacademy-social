@@ -194,6 +194,8 @@ API y worker leen la misma configuración. No configurar claves Meta, SMTP exter
 ### TLS interno y rotación
 
 Gunicorn exige TLS 1.3 mediante `gunicorn.py`; Caddy valida su certificado y hostname `brightbean-web` con la CA pública persistida en `/opt/saas/caddy/config/iacademy-social-ca.pem` (dentro de Caddy: `/config/iacademy-social-ca.pem`). **Nunca** `tls_insecure_skip_verify`.
+El proxy preserva explícitamente `Host` público con `header_up Host {http.request.host}`: Caddy 2.11 usa por defecto el host del upstream HTTPS, que Django rechaza. La red adicional se conserva para recreaciones mediante `compose.proxy-network.yml`, combinado con `/opt/saas/docker-compose.yml`; la conexión inicial no recrea Caddy. No ejecutar una recreación de ese proxy compartido fuera de una ventana aprobada.
+
 
 PostgreSQL exige TLS 1.3; `pg_hba.conf` permite socket local y únicamente `hostssl` por TCP. Django/migrador usan `sslmode=verify-full`, `sslrootcert=/run/secrets/brightbean_ca.crt` y `ssl_min_protocol_version=TLSv1.3`; hostname `brightbean-postgres`. Los certificados/keys web y PostgreSQL son distintos. Key PostgreSQL montada 400 para uid/gid 70; runtime/key web 400 para uid 1001.
 

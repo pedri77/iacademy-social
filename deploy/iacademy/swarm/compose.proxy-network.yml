@@ -1,0 +1,12 @@
+# Reutilizar junto a /opt/saas/docker-compose.yml cuando se RECREA Caddy.
+# Aplicar solo en una ventana aprobada: el despliegue inicial conecta la red
+# al contenedor existente sin reiniciarlo. No añade otros servicios a la overlay.
+services:
+  caddy:
+    networks:
+      default: {}
+      iacademy_social_front: {}
+networks:
+  iacademy_social_front:
+    external: true
+    name: iacademy_social_front

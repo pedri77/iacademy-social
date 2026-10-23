@@ -17,6 +17,8 @@ social.iacedemy.com {
 	@closed_accounts path /accounts/signup /accounts/signup/* /accounts/password/reset /accounts/password/reset/*
 	respond @closed_accounts "Private IAcademy instance; contact an administrator for access or recovery." 403
 	reverse_proxy https://brightbean-web:8000 {
+		# Caddy 2.11 ajusta Host al upstream HTTPS: Django espera el dominio público.
+		header_up Host {http.request.host}
 		transport http {
 			tls_trust_pool file /config/iacademy-social-ca.pem
 			tls_server_name brightbean-web
