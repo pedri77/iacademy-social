@@ -29,10 +29,10 @@
 
 ## Piloto IAcademy
 
-Distribución local fijada a `7bf959b30cc7f345f84d2be59e68a0a05c327e4f`; no conectada a cuentas Meta ni a IA.
-Instalación, verificaciones y bloqueos: [runbook F0/F1](docs/iacademy-runbook.md).
-Origen/licencia: [upstream.lock.json](deploy/iacademy/upstream.lock.json).
-El piloto usa un overlay explícito de Compose: no arrancar con el comando genérico de desarrollo de upstream.
+Distribución derivada de upstream `7bf959b30cc7f345f84d2be59e68a0a05c327e4f`, con instancia aislada en [social.iacedemy.com](https://social.iacedemy.com).
+Sin cuentas Meta, IA ni webhook comercial conectado; LIOS conserva ventas y receptor social hasta resolver el TLS de su PostgreSQL compartido y superar los gates.
+Instalación, versiones, pruebas y restauración comprobada: [runbook F0/F1](docs/iacademy-runbook.md).
+Origen/licencia: [upstream.lock.json](deploy/iacademy/upstream.lock.json). El piloto local usa Compose explícito; el despliegue aislado usa Swarm. No arrancar producción con el comando genérico de desarrollo upstream.
 
 ## About BrightBean Chat
 
