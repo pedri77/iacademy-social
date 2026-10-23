@@ -216,17 +216,19 @@
             <div class="app-content flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-hidden {% block content_wrap %}{% endblock %}">
             {% block content %}{% endblock %}
             </div>
+            {% include "partials/_source_offer.html" %}
         </main>
     </div>
 </div>
 {% else %}
-<main class="auth-bg min-h-screen flex items-center justify-center py-12 px-4" style="font-family: var(--font-body);">
+<main class="auth-bg min-h-screen flex flex-col gap-6 items-center justify-center py-12 px-4" style="font-family: var(--font-body);">
     {% comment %}
       Issue #31 owns the auth templates. They extend this file and fill this
       block; .auth-card and .auth-bg are already in the design system, so a
       login page is `{% extends "base.html" %}` plus a card.
     {% endcomment %}
     {% block auth_content %}{% endblock %}
+    {% include "partials/_source_offer.html" %}
 </main>
 {% endif %}
 

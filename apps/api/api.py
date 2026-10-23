@@ -37,7 +37,7 @@ from ninja import NinjaAPI
 
 from apps.api.auth import ApiKeyAuth
 from apps.api.errors import register_exception_handlers
-from apps.api.routers import catalog, contacts, messages
+from apps.api.routers import catalog, contacts, conversations, messages
 
 __all__ = ["api"]
 
@@ -65,5 +65,6 @@ api = NinjaAPI(
 register_exception_handlers(api)
 
 api.add_router("", contacts.router)
+api.add_router("", conversations.router)
 api.add_router("", messages.router)
 api.add_router("", catalog.router)

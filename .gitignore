@@ -249,3 +249,6 @@ apps/flows/static/flows/builder/
 
 # macOS
 .DS_Store
+
+# IAcademy pilot: local backups and synthetic runtime evidence, never source.
+/.local/

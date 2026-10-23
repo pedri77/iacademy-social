@@ -27,6 +27,13 @@
 
 ---
 
+## Piloto IAcademy
+
+Distribución local fijada a `7bf959b30cc7f345f84d2be59e68a0a05c327e4f`; no conectada a cuentas Meta ni a IA.
+Instalación, verificaciones y bloqueos: [runbook F0/F1](docs/iacademy-runbook.md).
+Origen/licencia: [upstream.lock.json](deploy/iacademy/upstream.lock.json).
+El piloto usa un overlay explícito de Compose: no arrancar con el comando genérico de desarrollo de upstream.
+
 ## About BrightBean Chat
 
 BrightBean Chat aims at ManyChat's feature set: keyword triggers, comment-to-DM,

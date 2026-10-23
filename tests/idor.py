@@ -223,6 +223,7 @@ WAIVED_ROUTES: dict[str, str] = {
     "api_v1:contacts_flow_start": _API_V1_WAIVER,
     "api_v1:contacts_delete": _API_V1_WAIVER,
     "api_v1:erasures_detail": _API_V1_WAIVER,
+    "api_v1:conversations_context": _API_V1_WAIVER,
     "accept_invite": (
         "Public by design: the invitation token IS the credential, and the page "
         "renders the same 404 body for unknown, expired and accepted tokens. "

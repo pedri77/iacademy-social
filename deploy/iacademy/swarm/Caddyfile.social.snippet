@@ -1,0 +1,25 @@
+# Snippet para el Caddy EXISTENTE (saas-caddy, standalone en saas_default).
+# NO despliegues un Caddy nuevo: 80/443 son de saas-caddy.
+#
+# Prerequisito (una vez, ejecutado por el operador en saas-01):
+#   docker network connect iacademy_social_front saas-caddy
+# Tras conectarlo, recarga Caddy:
+#   docker exec saas-caddy caddy reload --config /etc/caddy/Caddyfile
+#
+# `brightbean-web` es el alias estable del servicio app en la red frontal
+# (declarado en deploy/iacademy/swarm/brightbean-stack.yml). Caddy escribe
+# X-Forwarded-For desde esa red, que es exactamente la subred que debe llevar
+# BB_TRUSTED_PROXIES al desplegar el stack.
+
+social.iacedemy.com {
+	# HTTPS automático (ACME) gestionado por el Caddy existente; reutiliza su
+	# configuración global de email/almacén de certificados.
+	@closed_accounts path /accounts/signup /accounts/signup/* /accounts/password/reset /accounts/password/reset/*
+	respond @closed_accounts "Private IAcademy instance; contact an administrator for access or recovery." 403
+	reverse_proxy https://brightbean-web:8000 {
+		transport http {
+			tls_trust_pool file /config/iacademy-social-ca.pem
+			tls_server_name brightbean-web
+		}
+	}
+}

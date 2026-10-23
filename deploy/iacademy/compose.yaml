@@ -1,0 +1,40 @@
+# F0: synthetic data only. Never expose development settings through a tunnel.
+# Run from the repository root, explicitly excluding the auto-loaded dev override:
+# docker compose --env-file /dev/null -f docker-compose.yml -f deploy/iacademy/compose.yaml up -d --build
+name: iacademy-social-f0
+
+x-iacademy-environment: &iacademy-environment
+  DJANGO_SETTINGS_MODULE: config.settings.development
+  DATABASE_URL: postgres://postgres:postgres@postgres:5432/brightbean_chat
+  SECRET_KEY: ""
+  ENCRYPTION_KEY_SALT: ""
+  APP_URL: http://127.0.0.1:18730
+  DJANGO_ENV_FILE: /nonexistent
+
+services:
+  postgres:
+    ports: !reset []
+    environment:
+      POSTGRES_DB: brightbean_chat
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+  migrate:
+    image: iacademy-social:7bf959b-f0
+    environment: *iacademy-environment
+    env_file: !reset []
+
+  app:
+    image: iacademy-social:7bf959b-f0
+    command: [python, manage.py, runserver, 0.0.0.0:8000, --noreload]
+    ports: !override
+      - "127.0.0.1:18730:8000"
+    environment: *iacademy-environment
+    env_file: !reset []
+
+  worker:
+    image: iacademy-social:7bf959b-f0
+    environment: *iacademy-environment
+    env_file: !reset []
+    volumes:
+      - media_data:/app/media

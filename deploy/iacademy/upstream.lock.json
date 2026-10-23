@@ -1,0 +1,21 @@
+{
+  "repository": "https://github.com/brightbeanxyz/brightbean-chat.git",
+  "commit": "7bf959b30cc7f345f84d2be59e68a0a05c327e4f",
+  "local_branch": "iacademy/f0-f1",
+  "license": "AGPL-3.0",
+  "license_file": "LICENSE",
+  "local_image_id": "sha256:e804922d6f58d101b292276664577b67f6b91c27d6dbf4e9d4135b7a46f84be1",
+  "local_platform": "linux/arm64",
+  "migration_status": "2026-10-22: showmigrations --plan muestra todas las migraciones aplicadas",
+  "image_id_scope": "Imagen construida localmente, observada igual en migrate, app y worker. No es un digest publicado en un registry ni acredita una build amd64.",
+  "upstream_license_modified": false,
+  "pilot": {
+    "scope": "F0 local sintético y preparación F1; sin cuentas Meta conectadas",
+    "compose_project": "iacademy-social-f0",
+    "image": "iacademy-social:7bf959b-f0",
+    "bind": "127.0.0.1:18730",
+    "public_deployment": false,
+    "ai_enabled": false
+  },
+  "distribution_gate": "Conservar LICENSE y avisos originales. Antes de distribuir o servir una versión modificada por red, revisar y satisfacer AGPL-3.0, incluida la oferta del código fuente correspondiente cuando proceda. El SHA upstream no sustituye el código de las modificaciones locales."
+}

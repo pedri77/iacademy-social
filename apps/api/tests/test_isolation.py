@@ -27,6 +27,7 @@ from apps.contacts.models import Contact, ContactErasure, CustomField, CustomFie
 from apps.contacts.services import add_tag
 from apps.flows.models import Trigger, TriggerType
 from apps.flows.tests.support import graph, node, published_flow
+from apps.messaging.models import Conversation, Message, MessageDirection
 from apps.messaging.tests.conftest import make_connection
 from tests.idor import WAIVED_ROUTES
 
@@ -42,6 +43,12 @@ def victim_objects(workspace):
     flow = published_flow(workspace, graph([node("a", "action", NOOP_ACTION)]), name="Victim flow")
     Trigger(flow=flow, type=TriggerType.API).save()
     connection = make_connection(workspace, suffix="victim")
+    conversation = Conversation.objects.create(contact=contact, channel_connection=connection)
+    message = Message.objects.create(
+        conversation=conversation,
+        direction=MessageDirection.IN,
+        body={"blocks": [{"type": "text", "text": "victim inbound"}]},
+    )
     erasure = ContactErasure.objects.create(workspace=workspace, contact_id=contact.pk, source=ErasureSource.UI)
     return {
         "contact": contact,
@@ -49,6 +56,8 @@ def victim_objects(workspace):
         "field": field,
         "flow": flow,
         "connection": connection,
+        "conversation": conversation,
+        "message": message,
         "erasure": erasure,
     }
 
@@ -91,6 +100,12 @@ def object_routes(victim):
         # the day the tenancy check was removed.
         ("api_v1:contacts_delete", "delete", f"/api/v1/contacts/{contact.pk}?confirm=erase", None),
         ("api_v1:erasures_detail", "get", f"/api/v1/erasures/{victim['erasure'].pk}", None),
+        (
+            "api_v1:conversations_context",
+            "get",
+            f"/api/v1/conversations/{victim['conversation'].pk}/context?message_id={victim['message'].pk}",
+            None,
+        ),
     ]
 
 

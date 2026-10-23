@@ -34,6 +34,11 @@ __all__ = [
     "ContactCreate",
     "ContactOut",
     "ContactUpdate",
+    "ContextConnectionOut",
+    "ContextContactOut",
+    "ContextConversationOut",
+    "ContextMessageOut",
+    "ConversationContextOut",
     "CustomFieldOut",
     "FieldValueIn",
     "FieldValueOut",
@@ -268,3 +273,66 @@ class MessageOut(Schema):
     source: str
     error: str = ""
     created_at: dt.datetime
+
+
+# ---------------------------------------------------------------------------
+# Conversation context (integration read)
+# ---------------------------------------------------------------------------
+
+
+class ContextContactOut(Schema):
+    """The contact as an integration may see them: a name and a status, no more."""
+
+    id: UUID
+    first_name: str
+    last_name: str
+    status: str
+
+
+class ContextConnectionOut(Schema):
+    """The connection the thread runs on.
+
+    ``platform_account_id`` is the platform's public id for the asset (page
+    id, IG user id) — never a credential.
+    """
+
+    id: UUID
+    platform: str
+    platform_account_id: str
+
+
+class ContextConversationOut(Schema):
+    """The thread. ``path`` is this deployment's own route to it, reversed
+    server-side from the URL conf."""
+
+    id: UUID
+    state: str
+    path: str
+
+
+class ContextMessageOut(Schema):
+    """Inbound message metadata; never its text or attachments."""
+
+    id: UUID
+    provider_message_id: str
+    direction: str
+    status: str
+    created_at: dt.datetime
+
+
+class ConversationContextOut(Schema):
+    """``GET /api/v1/conversations/<id>/context`` — the whole contract.
+
+    An allowlist, not a projection: no email, phone, locale, tags, custom
+    fields, notes or history. ``attribution`` carries only the known keys
+    (``campaign_id``, ``ad_id``, ``media_id``, ``comment_id``, ``ref``); an
+    absent key means unknown.
+    """
+
+    version: int
+    workspace_id: UUID
+    contact: ContextContactOut
+    connection: ContextConnectionOut
+    conversation: ContextConversationOut
+    message: ContextMessageOut
+    attribution: dict[str, str] = {}

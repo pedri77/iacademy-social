@@ -1,0 +1,60 @@
+{
+  "version": "1.0.0",
+  "reviewed_at": "2026-10-22",
+  "status": "pending_commercial_approval",
+  "automated_replies_enabled": false,
+  "prices_enabled": false,
+  "commercial_terms_enabled": false,
+  "review_doc": "docs/iacademy-offer-review.md",
+  "disabled_reasons": [
+    "La configuración generadora del sitio contiene ofertas caducadas.",
+    "La web, el Price Book y la KB no coinciden en todas las ofertas.",
+    "No se ha comprobado el importe efectivo de los checkouts ni su vigencia.",
+    "La revisión de fuentes no sustituye la aprobación del responsable comercial."
+  ],
+  "facts": [
+    {
+      "id": "pricing_url",
+      "statement": "La información pública sobre planes se consulta en https://iacedemy.com/pricing/.",
+      "status": "verified_public_source",
+      "sources": ["https://iacedemy.com/pricing/"]
+    },
+    {
+      "id": "free_learning_url",
+      "statement": "IAcademy ofrece una ruta de acceso gratuito en https://iacedemy.com/free/.",
+      "status": "verified_public_source",
+      "sources": ["https://iacedemy.com/pricing/", "https://iacedemy.com/free/"]
+    },
+    {
+      "id": "enterprise_url",
+      "statement": "La información pública para empresas se consulta en https://iacedemy.com/enterprise/.",
+      "status": "verified_public_source",
+      "sources": ["https://iacedemy.com/enterprise/"]
+    }
+  ],
+  "handoff_rules": [
+    {
+      "id": "restricted_offer",
+      "trigger": "Consulta sobre una oferta recibida por correo, promoción privada o acceso de por vida.",
+      "action": "handoff",
+      "rule": "No confirmar ni negar la oferta ni proporcionar condiciones o enlaces privados. El asesor comprueba elegibilidad en el canal adecuado."
+    },
+    {
+      "id": "commercial_terms",
+      "trigger": "Consulta sobre precios, descuentos, vigencia, garantías o condiciones de compra.",
+      "action": "handoff",
+      "rule": "No citar importes ni promesas. Entregar la consulta al equipo; se puede facilitar la URL pública de precios sin afirmar condiciones."
+    },
+    {
+      "id": "account_or_person",
+      "trigger": "Petición de persona, consulta de cuenta, pagos, datos personales o reclamación.",
+      "action": "handoff",
+      "rule": "No resolver cuentas ni revelar datos personales en comentarios públicos. Derivar a una persona."
+    }
+  ],
+  "excluded_content": [
+    "Importes, condiciones y enlaces de ofertas restringidas",
+    "Materiales de pago y course/rag",
+    "Notas internas y mensajes de alumnos"
+  ]
+}

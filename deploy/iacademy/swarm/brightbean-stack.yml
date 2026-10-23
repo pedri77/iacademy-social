@@ -1,0 +1,325 @@
+# BrightBean — pila Swarm de producción para saas-01 (G-CENTRALIZACION).
+#
+#   docker stack config -c deploy/iacademy/swarm/brightbean-stack.yml   # valida
+#   docker stack deploy -c deploy/iacademy/swarm/brightbean-stack.yml brightbean
+#
+# Conservador por diseño: NO publica ningún puerto (el Caddy existente
+# `saas-caddy` es el único dueño de 80/443 y se conecta a la red frontal), NO
+# añade un Caddy propio, NO monta depends_on que finja ordenar arranques —
+# en Swarm el operador inicia primero PostgreSQL con app/worker a cero,
+# ejecuta `deploy/iacademy/swarm/migrate.sh` y solo tras su éxito habilita
+# las réplicas de app/worker.
+#
+# Secretos: solo secrets nativos de Swarm (raft cifrado + tmpfs). Nunca
+# env_file, nunca valores en `environment`, imágenes, git ni logs. El runtime
+# dotenv llega como fichero /run/secrets/brightbean_runtime.env y Django lo
+# lee vía DJANGO_ENV_FILE. La contraseña de PostgreSQL llega como
+# /run/secrets/postgres_password (POSTGRES_PASSWORD_FILE).
+#
+# Variables de despliegue (ninguna es secreta):
+#   BB_IMAGE           REQUERIDA. Imagen inmutable de BrightBean (uid 1001).
+#   PG_IMAGE           Imagen de PostgreSQL. Default postgres:16-alpine.
+#   BB_TRUSTED_PROXIES REQUERIDA. Subred de la red frontal
+#                      iacademy_social_front (p.ej. 10.99.0.0/24). Nunca 0/0.
+#   BB_RUNTIME_SECRET  Nombre del secret Swarm con el dotenv de runtime.
+#                      Default brightbean_runtime.
+#   BB_POSTGRES_SECRET Nombre del secret Swarm con la contraseña de PostgreSQL.
+#                      Default brightbean_postgres_password.
+#
+# Prerequisitos externos (los crea el operador, ver docs/iacademy-runbook.md §9):
+#   docker swarm init (manager 100.109.129.32 por Tailscale)
+#   docker network create -d overlay --attachable --opt encrypted \
+#     --subnet 10.99.0.0/24 iacademy_social_front
+#   docker network create -d overlay --attachable --opt encrypted \
+#     --subnet 10.99.3.0/24 iacademy_brightbean_backend
+#   Aprovisionar secretos nativos desde stdin; nunca guardar su contenido
+#   en este manifiesto, en argumentos de procesos ni en un .env del servidor.
+#
+# En el dotenv de runtime (dentro del secret, NO aquí) DATABASE_URL debe
+# apuntar a postgres://brightbean:<password>@brightbean-postgres:5432/brightbean
+# con base de datos y usuario `brightbean`.
+
+x-app-environment: &app-environment
+  DJANGO_SETTINGS_MODULE: config.settings.production
+  # Fichero tmpfs montado por Swarm a partir del secret. uid 1001 / gid 0 /
+  # 0400 se declaran abajo, en `secrets:` de cada servicio.
+  DJANGO_ENV_FILE: /run/secrets/brightbean_runtime.env
+  APP_URL: https://social.iacedemy.com
+  ALLOWED_HOSTS: social.iacedemy.com
+  # Solo la subred de la red frontal: ahí está el Caddy que escribe
+  # X-Forwarded-For. Cualquier otra fuente de esa cabecera la ignora el
+  # limitador de autenticación.
+  TRUSTED_PROXIES: ${BB_TRUSTED_PROXIES:?set BB_TRUSTED_PROXIES a la subred de iacademy_social_front, p.ej. 10.99.0.0/24 — nunca 0/0}
+
+x-app-secrets: &app-secrets
+  - &runtime-secret
+    source: runtime
+    target: brightbean_runtime.env
+    uid: "1001"
+    gid: "0"
+    mode: 0400
+  - &ca-secret
+    source: tls_ca
+    target: brightbean_ca.crt
+    uid: "1001"
+    gid: "0"
+    mode: 0444
+
+services:
+  app:
+    image: ${BB_IMAGE:?BB_IMAGE_required}
+    environment: *app-environment
+    secrets:
+      - *runtime-secret
+      - *ca-secret
+      - source: web_cert
+        target: brightbean_web.crt
+        uid: "1001"
+        mode: 0444
+      - source: web_key
+        target: brightbean_web.key
+        uid: "1001"
+        mode: 0400
+    configs:
+      - source: gunicorn_tls
+        target: /run/configs/gunicorn.py
+        mode: 0444
+    command:
+      - gunicorn
+      - config.wsgi:application
+      - --bind
+      - 0.0.0.0:8000
+      - --workers
+      - "2"
+      - --certfile
+      - /run/secrets/brightbean_web.crt
+      - --keyfile
+      - /run/secrets/brightbean_web.key
+      - --config
+      - /run/configs/gunicorn.py
+    cap_drop:
+      - ALL
+    # Nada de `ports:`. El Caddy existente llega por la red frontal
+    # iacademy_social_front y resuelve el alias `brightbean-web`.
+    networks:
+      iacademy_social_front:
+        aliases:
+          - brightbean-web
+      iacademy_brightbean_backend: null
+    volumes:
+      - bb_media_data:/app/media
+    # La sonda conecta a 127.0.0.1 pero presenta el Host de APP_URL: con
+    # ALLOWED_HOSTS estricto (solo social.iacedemy.com) la forma obvia de la
+    # sonda recibiría 400 DisallowedHost para siempre. Misma técnica que
+    # docker-compose.prod.yml, documentada allí.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import os, ssl, urllib.request as r; from urllib.parse import urlparse; h = urlparse(os.environ['APP_URL']).hostname; c = ssl.create_default_context(cafile='/run/secrets/brightbean_ca.crt'); r.urlopen(r.Request('https://127.0.0.1:8000/healthz', headers={'Host': h}), context=c, timeout=4)
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 60s
+    deploy:
+      replicas: ${BB_APP_REPLICAS:-0}
+      # Estado con volumen (media): una sola tarea a la vez, para que el
+      # volumen no se monte concurrente durante un update.
+      update_config:
+        parallelism: 1
+        order: stop-first
+        delay: 15s
+        failure_action: rollback
+        monitor: 45s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+        failure_action: pause
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 512M
+        reservations:
+          memory: 256M
+      placement:
+        constraints:
+          # Uninodo: fija todo al manager de saas-01. Con más nodos, mover a
+          # una etiqueta dedicada (node.labels.brightbean == true).
+          - node.role == manager
+    stop_grace_period: 30s
+
+  worker:
+    image: ${BB_IMAGE:?BB_IMAGE_required}
+    environment: *app-environment
+    secrets: *app-secrets
+    command: ["python", "manage.py", "process_tasks"]
+    cap_drop:
+      - ALL
+    networks:
+      iacademy_brightbean_backend: null
+    volumes:
+      - bb_media_data:/app/media
+    # Sin healthcheck a propósito (misma razón que docker-compose.prod.yml):
+    # no sirve ningún puerto y una sonda de shell reportaría "vivo" igual con
+    # el proceso atascado. La recuperación real es la política de reinicio.
+    deploy:
+      replicas: ${BB_WORKER_REPLICAS:-0}
+      update_config:
+        parallelism: 1
+        order: stop-first
+        delay: 15s
+        failure_action: rollback
+        monitor: 45s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+        failure_action: pause
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 384M
+        reservations:
+          memory: 192M
+      placement:
+        constraints:
+          - node.role == manager
+    stop_grace_period: 30s
+
+  postgres:
+    image: ${PG_IMAGE:-postgres:16-alpine}
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_min_protocol_version=TLSv1.3
+      - -c
+      - ssl_cert_file=/run/secrets/brightbean_pg.crt
+      - -c
+      - ssl_key_file=/run/secrets/brightbean_pg.key
+      - -c
+      - hba_file=/run/configs/pg_hba.conf
+    configs:
+      - source: postgres_hba
+        target: /run/configs/pg_hba.conf
+        mode: 0444
+    environment:
+      POSTGRES_DB: brightbean
+      POSTGRES_USER: brightbean
+      # Fichero, nunca el valor: Swarm lo monta en tmpfs.
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - source: pg_password
+        target: postgres_password
+        # Lo lee el entrypoint como root antes de soltar privilegios; modo
+        # restringido igualmente.
+        uid: "0"
+        gid: "0"
+        mode: 0400
+      - source: pg_cert
+        target: brightbean_pg.crt
+        uid: "70"
+        gid: "70"
+        mode: 0444
+      - source: pg_key
+        target: brightbean_pg.key
+        uid: "70"
+        gid: "70"
+        mode: 0400
+    # Sin cap_drop: el entrypoint arranca como root y baja a `postgres`
+    # (necesita CAP_SETUID/CAP_SETGID/CAP_CHOWN), igual que en Compose.
+    networks:
+      iacademy_brightbean_backend:
+        aliases:
+          - brightbean-postgres
+    # Nada de `ports:` — ni siquiera loopback (razón de SECURITY-BASELINE §8:
+    # un publish en 127.0.0.1 sigue siendo alcanzable desde cualquier
+    # contenedor y por túnel SSH). Acceso: docker exec sobre el servicio.
+    volumes:
+      - bb_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brightbean -d brightbean"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      replicas: 1
+      # Stateful singleton: nunca dos tareas montando bb_postgres_data.
+      # Los updates fallidos PAUSAN en vez de reintentar ciegamente.
+      update_config:
+        parallelism: 1
+        order: stop-first
+        delay: 20s
+        failure_action: pause
+        monitor: 60s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+        failure_action: pause
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 384M
+        reservations:
+          memory: 192M
+      placement:
+        constraints:
+          - node.role == manager
+    stop_grace_period: 30s
+
+secrets:
+  runtime:
+    name: ${BB_RUNTIME_SECRET:-brightbean_runtime}
+    external: true
+  pg_password:
+    name: ${BB_POSTGRES_SECRET:-brightbean_postgres_password}
+    external: true
+  tls_ca:
+    name: ${BB_TLS_CA_SECRET:?BB_TLS_CA_SECRET_required}
+    external: true
+  web_cert:
+    name: ${BB_WEB_CERT_SECRET:?BB_WEB_CERT_SECRET_required}
+    external: true
+  web_key:
+    name: ${BB_WEB_KEY_SECRET:?BB_WEB_KEY_SECRET_required}
+    external: true
+  pg_cert:
+    name: ${BB_PG_CERT_SECRET:?BB_PG_CERT_SECRET_required}
+    external: true
+  pg_key:
+    name: ${BB_PG_KEY_SECRET:?BB_PG_KEY_SECRET_required}
+    external: true
+
+configs:
+  gunicorn_tls:
+    name: ${BB_GUNICORN_CONFIG:?BB_GUNICORN_CONFIG_required}
+    external: true
+  postgres_hba:
+    name: ${BB_PG_HBA_CONFIG:?BB_PG_HBA_CONFIG_required}
+    external: true
+
+networks:
+  iacademy_social_front:
+    external: true
+  iacademy_brightbean_backend:
+    external: true
+
+volumes:
+  bb_postgres_data:
+    driver: local
+  bb_media_data:
+    driver: local
