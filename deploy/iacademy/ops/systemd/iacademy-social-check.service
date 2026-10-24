@@ -1,0 +1,11 @@
+[Unit]
+Description=IAcademy Social — check diario: frescura de backup y caducidad TLS
+After=docker.service
+Requires=docker.service
+OnFailure=iacademy-social-ops-alert@%n.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/iacademy-social/ops.conf
+ExecStart=/opt/saas/ops/iacademy-social/backup.sh check
+PrivateTmp=yes

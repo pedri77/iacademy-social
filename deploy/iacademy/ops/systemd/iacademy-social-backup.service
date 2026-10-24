@@ -1,0 +1,12 @@
+[Unit]
+Description=IAcademy Social — backup cifrado BrightBean + LIOS (oneshot)
+After=docker.service
+Requires=docker.service
+OnFailure=iacademy-social-ops-alert@%n.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/iacademy-social/ops.conf
+ExecStart=/opt/saas/ops/iacademy-social/backup.sh backup
+# El dump pasa por pipe directo a GPG; limitar exposición adicional del entorno.
+PrivateTmp=yes

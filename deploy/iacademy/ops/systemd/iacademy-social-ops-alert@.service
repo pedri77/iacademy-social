@@ -1,0 +1,7 @@
+[Unit]
+Description=IAcademy Social — alerta por fallo de unidad de ops (%i)
+
+[Service]
+Type=oneshot
+# Mensaje fijo sin PII: nombre de unidad y momento; el detalle queda en journald.
+ExecStart=/opt/saas/ops/iacademy-social/alert-command.sh %i

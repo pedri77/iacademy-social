@@ -1,0 +1,10 @@
+[Unit]
+Description=IAcademy Social — timer diario de backup (persistente)
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 UTC
+Persistent=true
+Unit=iacademy-social-backup.service
+
+[Install]
+WantedBy=timers.target

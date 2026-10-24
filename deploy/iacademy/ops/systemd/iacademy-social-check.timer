@@ -1,0 +1,10 @@
+[Unit]
+Description=IAcademy Social — timer diario de check (frescura + TLS)
+
+[Timer]
+OnCalendar=*-*-* 07:30:00 UTC
+Persistent=true
+Unit=iacademy-social-check.service
+
+[Install]
+WantedBy=timers.target

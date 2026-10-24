@@ -241,3 +241,33 @@ Conjunto completo verificado: `/opt/saas/backups/iacademy-social/brightbean-2026
 5. Instancia de restauración propia detenida al terminar; no se restauró ni sustituyó la BD productiva. El PostgreSQL local exclusivo de la suite LIOS también se detuvo, sin intervenir bases de otras sesiones.
 
 Es un snapshot puntual comprobado, **no** una programación automática de backups/rotación ni una alarma de caducidad de certificados. Esos controles operativos siguen pendientes antes de clientes reales, junto con G-LEGAL, permisos/prueba de Meta y G-CENTRALIZACION. G0 comercial permanece abierto por reconciliación de oferta; este despliegue no aprueba G-CORTE ni activa respuestas.
+
+## 10. Backup automático y checks operativos — scripts entregados 2026-10-24
+
+Software público en [`deploy/iacademy/ops/`](../deploy/iacademy/ops/): **listo para instalación, aún no instalado ni programado** (sin cron/timer activo, sin dry-run ni smoke ejecutados; el integrador lo opera). Sin credenciales en config, argv ni logs; los secretos solo se leen dentro de los contenedores.
+
+### Componentes
+
+- `backup.sh` — subcomandos `backup`, `check`, `retention`. Los targets se declaran como **servicios Swarm** (`*_SERVICE`); el script resuelve la réplica Running **única** por label `com.docker.swarm.service.name` y falla con 0 o >1 réplicas (nunca IDs volátiles). Dump PostgreSQL custom (`pg_dump -Fc`) por **pipe directo a GPG** (sin plaintext persistente); medios y **todos los secretos nativos montados** (`/run/secrets` completo de cada contenedor: web runtime/CA/crt+key, PG cert+key+password, LIOS runtime/API crt+key/CA y PG cert+key/password) cifrados igual, sin nombres hardcodeados. Secretos web como **UID de la app** (`docker exec -u`, nunca `-u 0`: `cap_drop=ALL`); PG con exec normal. GPG valida al inicio que el recipient esté en el homedir público del contrato. Fail-closed: servicio/replique, artefacto ausente/vacío, hash discordante, manifiesto con recuento erróneo o pipeline roto ⇒ conjunto queda `INCOMPLETE.txt` y salida ≠ 0; `mkdir` exclusivo sin reutilizar/reescribir conjuntos. `COMPLETE` (con SHA-256 del manifiesto) se escribe **solo** tras verificar todos los pipelines y hashes; nunca con 0 artefactos. Bloqueo single-flight con `flock`.
+- `retention.py` — retención **solo** sobre conjuntos completos de `/opt/saas/backups/iacademy-social/ops/`: diarios 30 días + primer completo de cada mes 12 meses; nunca borra el más reciente, ni conjuntos `INCOMPLETE`, ni manuales/pre-deploy/ajenos del directorio padre, ni sigue symlinks.
+- `alert-command.sh` — hook público de notificación: mensajes fijos sin PII por stdin o nombre de unidad. `/etc/iacademy-social/alert.conf` selecciona `notify-telegram.py`; este crea una tarea Swarm efímera que recibe las credenciales exclusivamente como secret nativo, comprueba la aceptación de Telegram y conserva el servicio si falla. `notify-refs.json` solo contiene imagen, red y nombre del secret. Sin notificador válido, el hook sale ≠ 0; no hay acuse falso.
+- `ops.conf` — config pública de targets, rutas, UIDs, recipient GPG y umbrales. LIOS está habilitado después de su migración a BD exclusiva; API y exec de PG como UID 0, web BB como UID 1001. Si falta algún servicio, falla el conjunto completo, sin fallback.
+- `systemd/` — `iacademy-social-backup.{service,timer}` (diario 02:30 UTC, `Persistent=true`) y `iacademy-social-check.{service,timer}` (diario 07:30): check de frescura de backup (`BACKUP_MAX_AGE_HOURS`, defecto 26) y caducidad TLS del endpoint público web, certs internos web BB (en `/run/secrets` de la app) y certs de PG BB/LIOS. Umbrales warn 30 d / error 7 d con salidas 2/1: **ambas ≠ 0 disparan `OnFailure` y el hook**. Ambas unidades con `OnFailure=iacademy-social-ops-alert@%n.service`.
+
+### Instalación (servidor, por el integrador)
+
+```bash
+install -d -m 0755 /opt/saas/ops/iacademy-social /etc/iacademy-social
+install -m 0755 deploy/iacademy/ops/backup.sh deploy/iacademy/ops/retention.py deploy/iacademy/ops/alert-command.sh deploy/iacademy/ops/notify-telegram.py /opt/saas/ops/iacademy-social/
+install -m 0644 deploy/iacademy/ops/ops.conf deploy/iacademy/ops/alert.conf deploy/iacademy/ops/notify-refs.json /etc/iacademy-social/
+install -m 0644 deploy/iacademy/ops/systemd/*.{service,timer} /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now iacademy-social-backup.timer iacademy-social-check.timer
+```
+
+Dependencias mínimas: `bash`, `/usr/bin/docker`, `gpg`, `python3` (stdlib), `openssl`, `flock`/`systemd` (Linux). `IACADEMY_OPS_CONF` apunta por defecto a `/etc/iacademy-social/ops.conf`; `IACADEMY_ALERT_ENV`, a `/etc/iacademy-social/alert.conf`. Son referencias públicas, no credenciales. Aprovisionar primero el secret nativo de notificación referido en `notify-refs.json`; nunca poner el token en esos archivos.
+
+### Restauración (GPG privada local, no en el servidor ni keyserver)
+
+Procedimiento ya acreditado en §9, reutilizable con los artefactos de `ops/`: descifrar en la Mac custodio (`gpg -d brightbean-db.dump.gpg`) y transmitir el stdout por SSH a `pg_restore --exit-on-error --single-transaction --no-owner --no-privileges` de una BD **nueva** en destino aislado (`--network none`, tmpfs), verificando tablas/FK/huellas y medios; después los secretos descifrados solo estructura tar. No existe un `restore --clean` ni se restaurará sobre producción.
+
+Pruebas permanentes: `tests/test_ops_retention.py` cubre solo los invariantes de retención (lógica pura, sin producción).
