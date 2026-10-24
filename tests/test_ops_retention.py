@@ -2,6 +2,7 @@
 
 No se ejecutan contra producción: solo la lógica pura de selección.
 """
+
 import datetime as dt
 import importlib.util
 import sys
@@ -9,6 +10,7 @@ from pathlib import Path
 
 OPS = Path(__file__).resolve().parents[1] / "deploy" / "iacademy" / "ops"
 spec = importlib.util.spec_from_file_location("retention", OPS / "retention.py")
+assert spec is not None and spec.loader is not None
 retention = importlib.util.module_from_spec(spec)
 sys.modules["retention"] = retention
 spec.loader.exec_module(retention)
@@ -26,10 +28,10 @@ def test_keeps_recent_daily_window():
 
 
 def test_expires_old_non_first_of_month():
-    sets = names((1, 5), (1, 6), (2, 3), (10, 23))  # 6-ene caduca; 5-ene (primer completo ene) y 3-feb (primer completo feb) se quedan
-    assert retention.select_expired(sets, NOW, daily_days=30, monthly_months=12) == [
-        "iacademy-social-20260106T023000Z"
-    ]
+    sets = names(
+        (1, 5), (1, 6), (2, 3), (10, 23)
+    )  # 6-ene caduca; 5-ene (primer completo ene) y 3-feb (primer completo feb) se quedan
+    assert retention.select_expired(sets, NOW, daily_days=30, monthly_months=12) == ["iacademy-social-20260106T023000Z"]
 
 
 def test_never_expires_newest_even_outside_window():
@@ -37,9 +39,7 @@ def test_never_expires_newest_even_outside_window():
         ("iacademy-social-20240101T023000Z", dt.date(2024, 1, 1)),
         ("iacademy-social-20240102T023000Z", dt.date(2024, 1, 2)),
     ]
-    assert retention.select_expired(sets, NOW, daily_days=30, monthly_months=12) == [
-        "iacademy-social-20240101T023000Z"
-    ]
+    assert retention.select_expired(sets, NOW, daily_days=30, monthly_months=12) == ["iacademy-social-20240101T023000Z"]
 
 
 def test_keeps_first_complete_of_each_month_within_12m():
@@ -52,9 +52,7 @@ def test_expires_monthly_beyond_12m():
         ("iacademy-social-20240901T023000Z", dt.date(2024, 9, 1)),
         ("iacademy-social-20261023T023000Z", dt.date(2026, 10, 23)),
     ]
-    assert retention.select_expired(sets, NOW, daily_days=30, monthly_months=12) == [
-        "iacademy-social-20240901T023000Z"
-    ]
+    assert retention.select_expired(sets, NOW, daily_days=30, monthly_months=12) == ["iacademy-social-20240901T023000Z"]
 
 
 def test_empty_is_noop():

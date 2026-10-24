@@ -4,6 +4,7 @@ Layout, env handling and the storage switch follow BrightBean Studio's
 ``config/settings/base.py``. Differences from Studio are marked inline.
 """
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -489,6 +490,17 @@ API_AUTH_FAILURE_WINDOW_SECONDS = env.int("API_AUTH_FAILURE_WINDOW_SECONDS", def
 # total deadline. Deliveries run on the worker, not in a request, but a slow
 # receiver still holds a queue slot.
 API_WEBHOOK_TIMEOUT_SECONDS = env.int("API_WEBHOOK_TIMEOUT_SECONDS", default=10)
+
+# Exact, operator-owned workspace/receiver pairs may share this proxy's public
+# IP. This is not a general SSRF bypass: only signed webhook delivery uses it.
+API_WEBHOOK_COHOSTED_RECEIVERS = json.loads(env.str("API_WEBHOOK_COHOSTED_RECEIVERS", default="{}"))
+if not isinstance(API_WEBHOOK_COHOSTED_RECEIVERS, dict) or any(
+    not isinstance(workspace_id, str)
+    or not isinstance(receivers, list)
+    or any(not isinstance(receiver, str) for receiver in receivers)
+    for workspace_id, receivers in API_WEBHOOK_COHOSTED_RECEIVERS.items()
+):
+    raise ImproperlyConfigured("API_WEBHOOK_COHOSTED_RECEIVERS must map workspace IDs to lists of exact HTTPS URLs.")
 
 # The "send test event" button is the one delivery that runs inside a request
 # rather than on the worker, because an operator clicking Test wants the answer

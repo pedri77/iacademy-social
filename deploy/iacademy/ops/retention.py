@@ -8,6 +8,7 @@ Invariantes:
 - Nunca se tocan: conjuntos sin COMPLETE (INCOMPLETE), symlinks, ficheros sueltos
   ni directorios que no siguen el patrón de nombres de este sistema.
 """
+
 import argparse
 import datetime as dt
 import re

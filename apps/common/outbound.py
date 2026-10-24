@@ -535,7 +535,13 @@ class _Target:
     origin: tuple[str, str, int]
 
 
-def _validate(url: httpx.URL, *, own_hosts: frozenset[str], own_addresses: frozenset[str]) -> _Target:
+def _validate(
+    url: httpx.URL,
+    *,
+    own_hosts: frozenset[str],
+    own_addresses: frozenset[str],
+    cohosted_webhook: bool = False,
+) -> _Target:
     """Run every check on one URL and return what to connect to.
 
     Raises :class:`BlockedURLError` for anything refused. Called once per hop,
@@ -574,6 +580,13 @@ def _validate(url: httpx.URL, *, own_hosts: frozenset[str], own_addresses: froze
     # punycode name is recognised under the other.
     if lowered in own_hosts or display in own_hosts:
         raise BlockedURLError("That URL points back at this deployment.")
+    if cohosted_webhook:
+        try:
+            ipaddress.ip_address(lowered)
+        except ValueError:
+            pass
+        else:
+            raise BlockedURLError("A cohosted webhook requires a distinct receiver hostname, not a literal address.")
 
     addresses = resolve_host(lowered)
     if not addresses:
@@ -583,7 +596,9 @@ def _validate(url: httpx.URL, *, own_hosts: frozenset[str], own_addresses: froze
         refusal = refusal_for(address)
         if refusal:
             raise BlockedURLError(f"{lowered} resolves to {refusal}.")
-        if str(_unwrap(address)) in own_addresses:
+        if cohosted_webhook and not _unwrap(address).is_global:
+            raise BlockedURLError(f"{lowered} does not resolve exclusively to public addresses.")
+        if not cohosted_webhook and str(_unwrap(address)) in own_addresses:
             raise BlockedURLError("That URL points back at this deployment.")
 
     port = url.port
@@ -713,6 +728,7 @@ def guarded_request(
     timeout: float = DEFAULT_TIMEOUT,
     max_bytes: int | None = None,
     client: httpx.Client | None = None,
+    cohosted_webhook: bool = False,
 ) -> GuardedResponse:
     """Make one HTTP request to a URL somebody else chose.
 
@@ -734,6 +750,11 @@ def guarded_request(
     resolved from cache — but a caller needing a bound on resolution itself
     needs one around ``guarded_request``.
 
+    ``cohosted_webhook`` is reserved for signed deliveries to exact
+    workspace/URL pairs approved by the operator. It permits a shared public
+    proxy IP, not this application's hostname or any private address. Only
+    HTTPS POST without query/fragment is accepted; redirects are refused.
+
     ``client`` is the test seam, the same one
     :func:`apps.channels.providers.base.request_json` offers — pass an
     ``httpx.Client`` on a ``MockTransport`` and no socket is opened.
@@ -750,11 +771,18 @@ def guarded_request(
     send_headers = _clean_headers(headers)
     current_method = str(method or "GET").upper()
     body_json, body_content = json, content
+    initial_url = _parsed(url)
+    if cohosted_webhook and (
+        current_method != "POST" or initial_url.scheme != "https" or initial_url.query or initial_url.fragment
+    ):
+        raise BlockedURLError("A cohosted webhook requires HTTPS POST without a query or fragment.")
 
     owned = client is None
     http = client or httpx.Client(timeout=httpx.Timeout(budget, connect=min(CONNECT_TIMEOUT, budget)), trust_env=False)
     try:
-        target = _validate(_parsed(url), own_hosts=own_hosts, own_addresses=own_addresses)
+        target = _validate(
+            initial_url, own_hosts=own_hosts, own_addresses=own_addresses, cohosted_webhook=cohosted_webhook
+        )
         for hop in range(MAX_REDIRECTS + 1):
             status, response_headers, body, truncated = _send(
                 http,
@@ -778,6 +806,8 @@ def guarded_request(
                     final_url=str(target.logical),
                     final_host=target.host,
                 )
+            if cohosted_webhook:
+                raise BlockedURLError("A cohosted webhook receiver must not redirect.")
             if hop == MAX_REDIRECTS:
                 raise BlockedURLError(f"{target.host} redirected more than {MAX_REDIRECTS} times.")
 

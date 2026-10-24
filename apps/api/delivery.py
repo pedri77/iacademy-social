@@ -203,6 +203,7 @@ def deliver_once(
             headers=headers,
             content=body,
             timeout=settings.API_WEBHOOK_TIMEOUT_SECONDS if timeout is None else timeout,
+            cohosted_webhook=webhook.url in settings.API_WEBHOOK_COHOSTED_RECEIVERS.get(str(webhook.workspace_id), []),
         )
     except BlockedURLError as exc:
         # The address itself is refused. Retrying repeats the same refusal, so
