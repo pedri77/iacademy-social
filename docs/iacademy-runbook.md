@@ -271,3 +271,19 @@ Dependencias mínimas: `bash`, `/usr/bin/docker`, `gpg`, `python3` (stdlib), `op
 Procedimiento ya acreditado en §9, reutilizable con los artefactos de `ops/`: descifrar en la Mac custodio (`gpg -d brightbean-db.dump.gpg`) y transmitir el stdout por SSH a `pg_restore --exit-on-error --single-transaction --no-owner --no-privileges` de una BD **nueva** en destino aislado (`--network none`, tmpfs), verificando tablas/FK/huellas y medios; después los secretos descifrados solo estructura tar. No existe un `restore --clean` ni se restaurará sobre producción.
 
 Pruebas permanentes: `tests/test_ops_retention.py` cubre solo los invariantes de retención (lógica pura, sin producción).
+
+## 11. Excepción autorizada: WhatsApp conectado antes de G-CENTRALIZACION — 2026-10-25
+
+**Decisión de David (25-10-2026):** conectar WhatsApp a BrightBean como canal de venta **antes** de cerrar G-CENTRALIZACION, contra lo previsto en §8 («obligatorio antes de cambiar el receptor Meta»). Se acepta como excepción porque solo **entra** información:
+
+- App Meta propia, «IAcademy BrightBean» (2390068988402258), separada de la del soporte (IAcademy Ops). Usuario del sistema `brightbean`, con permisos mínimos sobre la app y la cuenta de WhatsApp (mensajes y números). Token sin caducidad, pegado por David en BrightBean.
+- Runtime en el secret nativo `iacademy_bb_runtime_20261025_v5` (v4 + `PLATFORM_WHATSAPP_CLIENT_ID`/`_CLIENT_SECRET`/`_VERIFY_TOKEN`), montado en `brightbean_app` y `brightbean_worker`. v4 se conserva para volver atrás. **El próximo `docker stack deploy` debe llevar `BB_RUNTIME_SECRET=iacademy_bb_runtime_20261025_v5`.**
+- Webhook `https://social.iacedemy.com/webhooks/whatsapp/` dado de alta en la app (campo `messages`). Comprobado con un mensaje real: el canal pasa a «Healthy».
+- El soporte (`iacademy-soporte`) recibe el mismo mensaje en modo `WA_MODO=copia` y solo lo atiende si el cliente pide una persona.
+
+**Límites de la excepción (siguen en vigor G-CORTE y §5):**
+
+- El flujo «IAcademy · WhatsApp ventas» está importado como **borrador con los disparadores apagados**. No se publica ni se encienden disparadores hasta aprobar G-CORTE y reconciliar la oferta (G0).
+- Ninguna IA conectada a WhatsApp, ninguna difusión, ningún envío iniciado por la empresa.
+- Hoy además no se puede enviar nada: Meta devuelve `(#10) Viewer cannot access the provided Paid Message Account` a cualquier envío, y la vinculación de la cuenta de mensajería da 1675034. Caso pendiente con Meta.
+- Volver atrás: quitar la suscripción de la app BrightBean a la WABA (`DELETE /<waba_id>/subscribed_apps` con su token, o «Disconnect» del canal en BrightBean) y volver a `…_v4` con `docker service update` en app y worker.
