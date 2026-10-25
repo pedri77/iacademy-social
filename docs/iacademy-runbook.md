@@ -242,9 +242,9 @@ Conjunto completo verificado: `/opt/saas/backups/iacademy-social/brightbean-2026
 
 Es un snapshot puntual comprobado, **no** una programación automática de backups/rotación ni una alarma de caducidad de certificados. Esos controles operativos siguen pendientes antes de clientes reales, junto con G-LEGAL, permisos/prueba de Meta y G-CENTRALIZACION. G0 comercial permanece abierto por reconciliación de oferta; este despliegue no aprueba G-CORTE ni activa respuestas.
 
-## 10. Backup automático y checks operativos — scripts entregados 2026-10-24
+## 10. Backup automático y checks operativos — activos desde 2026-10-24
 
-Software público en [`deploy/iacademy/ops/`](../deploy/iacademy/ops/): **listo para instalación, aún no instalado ni programado** (sin cron/timer activo, sin dry-run ni smoke ejecutados; el integrador lo opera). Sin credenciales en config, argv ni logs; los secretos solo se leen dentro de los contenedores.
+Instalado en `saas-01` desde el commit público `51467b7345f5716d43e2c9e2f326dc995880657c`, extraído con `git archive`. Scripts en `/opt/saas/ops/iacademy-social`, referencias públicas en `/etc/iacademy-social` y unidades en `/etc/systemd/system`. Ambos timers están **enabled/active**, con recurrencias a las 02:30 y 07:30 UTC. Sin credenciales en config, argv ni logs; los secretos solo se leen dentro de los contenedores.
 
 ### Componentes
 
@@ -271,3 +271,55 @@ Dependencias mínimas: `bash`, `/usr/bin/docker`, `gpg`, `python3` (stdlib), `op
 Procedimiento ya acreditado en §9, reutilizable con los artefactos de `ops/`: descifrar en la Mac custodio (`gpg -d brightbean-db.dump.gpg`) y transmitir el stdout por SSH a `pg_restore --exit-on-error --single-transaction --no-owner --no-privileges` de una BD **nueva** en destino aislado (`--network none`, tmpfs), verificando tablas/FK/huellas y medios; después los secretos descifrados solo estructura tar. No existe un `restore --clean` ni se restaurará sobre producción.
 
 Pruebas permanentes: `tests/test_ops_retention.py` cubre solo los invariantes de retención (lógica pura, sin producción).
+
+### Evidencia productiva — acta 2026-10-25
+
+- `systemd-analyze verify` sin errores; ejecución inicial de backup y check con salida 0. El backup automático del 25 de octubre se disparó a las 02:30:01 UTC y terminó con `Result=success`, `ExecMainStatus=0`.
+- Primer conjunto completo: `/opt/saas/backups/iacademy-social/ops/iacademy-social-20261024T081605Z`. Ocho artefactos GPG y manifiesto custodiados también cifrados en el Mac; coinciden tamaños y SHA-256 de los ocho.
+- Ambos dumps se descifraron en el Mac y transmitieron por SSH a PostgreSQL independiente sobre tmpfs, `--network none`, sin puertos ni workers. GPG y ambos `pg_restore --exit-on-error --single-transaction --no-owner --no-privileges` devolvieron 0; tablas y FK válidas contrastadas. Ninguna base productiva se restauró.
+- Los seis tar se descifraron y recorrieron sin persistir plaintext: runtime, CA pública, certificados, claves de servicio y passwords PostgreSQL nativos presentes. Los dos volúmenes de medios estaban vacíos: **no acredita recuperación de adjuntos reales**. Los fixtures se detuvieron al terminar.
+- El hook real obtuvo aceptación de Telegram. Una unidad transitoria propia ejecutó `/usr/bin/false`: su `OnFailure` arrancó la plantilla de alerta, que terminó con salida 0 tras la aceptación de Telegram. No se forzó el fallo de backup/check reales.
+- CA privada y clave GPG privada exclusivamente en el Mac custodio; no están en el servidor.
+
+## 11. Estado vigente de centralización y entrega HTTPS — 2026-10-25
+
+Este apartado sustituye los estados provisionales del despliegue del 23 de octubre (§9), sin borrar su evidencia histórica.
+
+### Versiones y operación
+
+- BrightBean app y worker: `iacademy-social:20261024-923754123a`, commit público `923754123a3039efb0689d4207c289248d10c3fd`. Imagen `sha256:0a2b3dd0957b930cd593c4ff64d4b366fea1781dca8c645c3961edd5b63a7e9e`, app saludable.
+- Runtime nativo `iacademy_bb_runtime_20261024_v2`, conservando las claves de cifrado originales. No copiar sus valores a documentación, configuración pública o argv.
+- Referencias públicas de despliegue en `/opt/saas/config/brightbean-stack.refs` (modo 0600): imagen, secretos/configs por nombre, proxies y réplicas. `docker stack config` con esas referencias coincide con imagen, runtime y réplicas instalados. Al rotar runtime o imagen, actualizar también estas referencias; no reutilizar referencias antiguas a ciegas.
+- LIOS utiliza PostgreSQL exclusivo con TLS 1.3, `verify-full` y role sin privilegios administrativos; API, worker `default` y scheduler desplegados. Los cuatro contenedores legacy están parados y con reinicio deshabilitado. `saas-pg` no se modificó.
+- `lios_worker-conversacion` permanece a **0 réplicas**: no se habilitó su ruta legacy de inferencia externa. La recepción Messenger no se apagó.
+
+### Receptor coalojado sin desactivar SSRF
+
+`API_WEBHOOK_COHOSTED_RECEIVERS` solo permite, para el workspace autorizado, el destino exacto `https://ventas.iacedemy.com/webhooks/brightbean`. Únicamente el envío de webhook firmado puede utilizarlo: POST HTTPS sin userinfo, query, fragmento ni redirecciones; hostname distinto del emisor; todas las IP resueltas públicas; DNS fijado y validación TLS/SNI. El resto de destinos conserva la protección general. No se habilitaron destinos privados ni un bypass global.
+
+Validación del cambio: regresión fallida antes del arreglo, 181 pruebas focalizadas aprobadas, suite completa **8.841 aprobadas / 12 omitidas upstream**; Ruff, formato de 830 archivos y mypy de 855 archivos sin errores; `npm ci` y build aprobados, con avisos Vite existentes. Revisión independiente de seguridad sin hallazgos.
+
+### Smoke real de extremo a extremo
+
+Contacto propio marcado como prueba, creado mediante BrightBean sin email, teléfono ni identidad Meta ficticia. Se utilizó el productor y worker reales, no sobres de eventos fabricados:
+
+| Escenario | Evidencia observada |
+| --- | --- |
+| Entrega firmada por HTTPS | BrightBean `succeeded`, LIOS HTTP 202 y una ficha comercial |
+| Firma inválida | HTTP 401 |
+| Ocho reenvíos simultáneos del mismo cuerpo | Ocho HTTP 200 y un único recibo/ficha |
+| Mismo delivery con cuerpo distinto y firma válida | HTTP 409 |
+| Vinculación explícita repetida | Un registro de vinculación; contexto HTTPS con identidad verificada |
+| Caída controlada del contexto BrightBean | Job LIOS pendiente tras el primer intento; tras restaurar app, `done` al segundo intento y error eliminado |
+| Continuidad comercial | Contexto HTTPS conserva etapa `cita` y tarea siguiente propia |
+| Supresión LIOS seguida de evento nuevo real | Evento procesado como `skipped`, persona ausente y contexto HTTP 404: sin resurrección |
+
+La caída se limitó a la app BrightBean, con worker/LIOS/proxy activos, recuperación en `finally` y failsafe independiente. No existían canales Meta ni contactos reales en BrightBean.
+
+Al terminar, se ejecutó el borrado nativo desde la interfaz de BrightBean: `ContactErasure=done`, con un contacto, sus tres asociaciones de etiquetas y cinco acciones eliminados. Se retiraron las tres definiciones de etiquetas de prueba sin referencias. **Quedan cero contactos y cero canales**; LIOS conserva únicamente la marca mínima de supresión y auditoría necesaria.
+
+### Límites y siguientes gates
+
+Esto acredita el transporte y la centralización comercial, **no** la recepción/respuesta de un DM real, el hilo Meta, permisos públicos, conversión o recuperación de adjuntos. BrightBean aún no es el receptor Meta y no tiene canales conectados. El corte requiere la prueba controlada real y un único emisor.
+
+Las URLs de condiciones y eliminación se guardaron en la aplicación Meta propia y se comprobó su persistencia tras recargar. La identidad jurídica publicada sigue incompleta: no se declara cerrado G-LEGAL ni se inventa NIF/domicilio.
