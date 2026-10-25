@@ -287,3 +287,7 @@ Pruebas permanentes: `tests/test_ops_retention.py` cubre solo los invariantes de
 - Ninguna IA conectada a WhatsApp, ninguna difusión, ningún envío iniciado por la empresa.
 - Hoy además no se puede enviar nada: Meta devuelve `(#10) Viewer cannot access the provided Paid Message Account` a cualquier envío, y la vinculación de la cuenta de mensajería da 1675034. Caso pendiente con Meta.
 - Volver atrás: quitar la suscripción de la app BrightBean a la WABA (`DELETE /<waba_id>/subscribed_apps` con su token, o «Disconnect» del canal en BrightBean) y volver a `…_v4` con `docker service update` en app y worker.
+
+### 11.1 Respuesta automática mínima en Messenger e Instagram — 2026-10-25
+
+David decidió el 25-10 que, hasta G-CORTE, los mensajes de Messenger e Instagram reciban una respuesta automática en lugar de quedarse sin contestar. Flujo «IAcademy · Respuesta automática Messenger e Instagram» (importado como borrador): disparador «respuesta por defecto» en los dos canales (como mucho una vez al día por contacto), un mensaje que dice que es automático y que contestará una persona, el correo de soporte y los enlaces a `/pricing/` y `/free/`, y la etiqueta «Pendiente de respuesta» para contestar a mano desde la bandeja. Sin IA ni plazos. BrightBean no tiene pasos de IA (SPEC: «no AI reply nodes»); si hiciera falta IA, iría por `external_request` al agente de `iacademy-soporte` (Mistral, UE) y después de G-CORTE. Publicarlo («Set live» y encender los disparadores) lo hace David.
